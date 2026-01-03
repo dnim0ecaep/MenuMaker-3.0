@@ -1,5 +1,7 @@
 # MenuMaker-3.0 
-(version 3, is written in Rust and runs much faster)
+This version 3, is written in Rust and runs much faster than the previos python versions.
+
+
 Menu Maker is a cross-platform terminal-based application launcher designed for efficiency, simplicity, and full customization. It allows users to organize commands and scripts into expandable categories, offering a clean and intuitive interface to execute system tools, development utilities, or any shell commands directly from the terminal.
 
 Core Features:
