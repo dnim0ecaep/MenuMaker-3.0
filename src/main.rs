@@ -130,20 +130,16 @@ fn render(frame: &mut Frame, app: &AppState) {
         .alignment(Alignment::Center)
         .style(
             Style::default()
-                .fg(app.theme.background)
-                .bg(app.theme.accent)
+                .fg(app.theme.text)
+                .bg(app.theme.primary)
                 .add_modifier(Modifier::BOLD),
         );
     frame.render_widget(header, chunks[0]);
 
+    let shortcuts_bg = color_from_hex("#76B3C5").unwrap_or(app.theme.highlight);
     let shortcuts = Paragraph::new(app.footer_line())
         .alignment(Alignment::Center)
-        .style(
-            Style::default()
-                .bg(app.theme.primary)
-                .fg(app.theme.surface)
-                .add_modifier(Modifier::BOLD),
-        );
+        .style(Style::default().bg(shortcuts_bg));
     frame.render_widget(shortcuts, chunks[1]);
 
     let content_area = chunks[2];
@@ -164,8 +160,8 @@ fn render(frame: &mut Frame, app: &AppState) {
         .alignment(Alignment::Center)
         .style(
             Style::default()
-                .bg(app.theme.accent)
-                .fg(app.theme.background)
+                .bg(app.theme.primary)
+                .fg(app.theme.text)
                 .add_modifier(Modifier::BOLD),
         );
     frame.render_widget(status, chunks[3]);
@@ -197,7 +193,7 @@ fn render_columns(frame: &mut Frame, area: Rect, app: &AppState) {
                 let (mut display_line, mut entry_style) = (line, style);
                 if *entry_index == app.current_index {
                     entry_style = entry_style
-                        .bg(app.theme.accent)
+                        .bg(app.theme.highlight)
                         .fg(app.theme.background)
                         .add_modifier(Modifier::BOLD);
                     display_line = app.highlight_entry_line(display_line);
@@ -307,8 +303,8 @@ fn render_category_form_popup(
             .alignment(Alignment::Center)
             .style(
                 Style::default()
-                    .bg(app.theme.accent)
-                    .fg(app.theme.background)
+                    .bg(app.theme.primary)
+                    .fg(app.theme.text)
                     .add_modifier(Modifier::BOLD),
             );
         frame.render_widget(header, header_area);
@@ -321,8 +317,7 @@ fn render_category_form_popup(
             .alignment(Alignment::Center)
             .style(
                 Style::default()
-                    .bg(app.theme.primary)
-                    .fg(app.theme.surface)
+                    .bg(app.theme.highlight)
                     .add_modifier(Modifier::BOLD),
             );
         frame.render_widget(shortcuts, shortcuts_area);
@@ -342,8 +337,8 @@ fn render_category_form_popup(
             .alignment(Alignment::Center)
             .style(
                 Style::default()
-                    .bg(app.theme.accent)
-                    .fg(app.theme.background)
+                    .bg(app.theme.primary)
+                    .fg(app.theme.text)
                     .add_modifier(Modifier::BOLD),
             );
         frame.render_widget(status, status_area);
@@ -450,8 +445,8 @@ fn render_item_form_popup(frame: &mut Frame, area: Rect, app: &AppState, form: &
             .alignment(Alignment::Center)
             .style(
                 Style::default()
-                    .bg(app.theme.accent)
-                    .fg(app.theme.background)
+                    .bg(app.theme.primary)
+                    .fg(app.theme.text)
                     .add_modifier(Modifier::BOLD),
             );
         frame.render_widget(header, header_area);
@@ -460,8 +455,7 @@ fn render_item_form_popup(frame: &mut Frame, area: Rect, app: &AppState, form: &
             .alignment(Alignment::Center)
             .style(
                 Style::default()
-                    .bg(app.theme.primary)
-                    .fg(app.theme.surface)
+                    .bg(app.theme.highlight)
                     .add_modifier(Modifier::BOLD),
             );
         frame.render_widget(shortcuts, shortcuts_area);
@@ -481,8 +475,8 @@ fn render_item_form_popup(frame: &mut Frame, area: Rect, app: &AppState, form: &
             .alignment(Alignment::Center)
             .style(
                 Style::default()
-                    .bg(app.theme.accent)
-                    .fg(app.theme.background)
+                    .bg(app.theme.primary)
+                    .fg(app.theme.text)
                     .add_modifier(Modifier::BOLD),
             );
         frame.render_widget(status, status_area);
@@ -506,8 +500,8 @@ fn render_settings_form_popup(
             .alignment(Alignment::Center)
             .style(
                 Style::default()
-                    .bg(app.theme.accent)
-                    .fg(app.theme.background)
+                    .bg(app.theme.primary)
+                    .fg(app.theme.text)
                     .add_modifier(Modifier::BOLD),
             );
         frame.render_widget(header, header_area);
@@ -520,8 +514,7 @@ fn render_settings_form_popup(
             .alignment(Alignment::Center)
             .style(
                 Style::default()
-                    .bg(app.theme.primary)
-                    .fg(app.theme.surface)
+                    .bg(app.theme.highlight)
                     .add_modifier(Modifier::BOLD),
             );
         frame.render_widget(shortcuts, shortcuts_area);
@@ -541,8 +534,8 @@ fn render_settings_form_popup(
             .alignment(Alignment::Center)
             .style(
                 Style::default()
-                    .bg(app.theme.accent)
-                    .fg(app.theme.background)
+                    .bg(app.theme.primary)
+                    .fg(app.theme.text)
                     .add_modifier(Modifier::BOLD),
             );
         frame.render_widget(status, status_area);
@@ -557,9 +550,9 @@ fn build_category_shortcut_line(
     let mut segments: Vec<CategoryShortcutSegment> = Vec::new();
     let mut cursor: u16 = 0;
     let key_style = Style::default()
-        .fg(app.theme.background)
+        .fg(app.theme.accent)
         .add_modifier(Modifier::BOLD);
-    let label_style = Style::default().fg(app.theme.text);
+    let label_style = Style::default().fg(app.theme.surface);
     let entries: Vec<(&str, &str, CategoryShortcutAction)> = vec![
         ("Tab", " Move", CategoryShortcutAction::NextField),
         ("↵", " Save", CategoryShortcutAction::Submit),
@@ -671,26 +664,15 @@ fn materialize_form_lines(
 fn highlight_line_with_width(
     mut line: Line<'static>,
     width: usize,
-    app: &AppState,
+    _app: &AppState,
 ) -> Line<'static> {
-    let highlight_style = Style::default()
-        .bg(app.theme.accent)
-        .fg(app.theme.background)
-        .add_modifier(Modifier::BOLD);
     let mut text_width = 0usize;
     for span in &mut line.spans {
-        span.style.bg = Some(app.theme.accent);
-        if span.style.fg.is_none() {
-            span.style.fg = Some(app.theme.background);
-        }
         span.style = span.style.add_modifier(Modifier::BOLD);
         text_width += UnicodeWidthStr::width(span.content.as_ref());
     }
     if width > text_width {
-        line.spans.push(Span::styled(
-            " ".repeat(width - text_width),
-            highlight_style,
-        ));
+        line.spans.push(Span::raw(" ".repeat(width - text_width)));
     }
     line
 }
@@ -717,20 +699,10 @@ fn make_field_line(label: &str, value: &str, selected: bool, app: &AppState) -> 
     } else {
         value.to_string()
     };
-    let mut label_style = Style::default()
+    let label_style = Style::default()
         .fg(app.theme.accent)
         .add_modifier(Modifier::BOLD);
-    let mut value_style = Style::default().fg(app.theme.text);
-    if selected {
-        label_style = label_style
-            .bg(app.theme.accent)
-            .fg(app.theme.background)
-            .add_modifier(Modifier::BOLD);
-        value_style = value_style
-            .bg(app.theme.accent)
-            .fg(app.theme.background)
-            .add_modifier(Modifier::BOLD);
-    }
+    let value_style = Style::default().fg(app.theme.text);
     let label_span = Span::styled(format!("{label}: "), label_style);
     let value_span = Span::styled(value_display, value_style);
     if selected {
@@ -752,22 +724,12 @@ fn make_color_field_line(
     } else {
         value.to_string()
     };
-    let mut label_style = Style::default()
+    let label_style = Style::default()
         .fg(app.theme.accent)
         .add_modifier(Modifier::BOLD);
-    let mut value_style = Style::default()
-        .fg(app.theme.text)
+    let value_style = Style::default()
+        .fg(color.unwrap_or(app.theme.text))
         .add_modifier(Modifier::BOLD);
-    if selected {
-        label_style = label_style
-            .bg(app.theme.accent)
-            .fg(app.theme.background)
-            .add_modifier(Modifier::BOLD);
-        value_style = Style::default()
-            .bg(app.theme.accent)
-            .fg(color.unwrap_or(app.theme.background))
-            .add_modifier(Modifier::BOLD);
-    }
     let label_span = Span::styled(format!("{label}: "), label_style);
     let value_span = Span::styled(value_display, value_style);
     if selected {
@@ -779,19 +741,12 @@ fn make_color_field_line(
 
 fn make_toggle_line(label: &str, value: bool, selected: bool, app: &AppState) -> FormLine {
     let status = if value { "Yes" } else { "No" };
-    let mut label_style = Style::default()
+    let label_style = Style::default()
         .fg(app.theme.accent)
         .add_modifier(Modifier::BOLD);
     let mut value_style = Style::default()
         .fg(if value { Color::Green } else { Color::Red })
         .add_modifier(Modifier::BOLD);
-    if selected {
-        label_style = label_style
-            .bg(app.theme.accent)
-            .fg(app.theme.background)
-            .add_modifier(Modifier::BOLD);
-        value_style = value_style.bg(app.theme.accent).fg(app.theme.background);
-    }
     let label_span = Span::styled(format!("{label}: "), label_style);
     let value_span = Span::styled(status, value_style);
     if selected {
@@ -1044,7 +999,7 @@ impl MenuFile {
             app_settings: AppSettings {
                 title: Some("Menu Maker — Enhanced Categorized Menu System".into()),
                 columns: Some(1),
-                theme_key: Some("classic".into()),
+                theme_key: Some("nord".into()),
             },
             custom_colors: Vec::new(),
             saved_themes: Vec::new(),
@@ -1144,6 +1099,30 @@ impl AppState {
             &theme,
             &saved_themes,
         );
+        let resolved_theme = if stored_theme_key == CUSTOM_THEME_KEY {
+            theme.clone()
+        } else if let Some(idx) = parse_saved_theme_key(&stored_theme_key) {
+            saved_themes.get(idx).and_then(|saved| {
+                let highlight = saved
+                    .highlight
+                    .as_deref()
+                    .unwrap_or_else(|| saved.accent.as_str());
+                Some(Theme::from_hexes(
+                    saved.name.clone(),
+                    &saved.primary,
+                    &saved.accent,
+                    highlight,
+                    &saved.background,
+                    &saved.surface,
+                    &saved.text,
+                ))
+            })
+            .unwrap_or_else(|| theme.clone())
+        } else if is_preset_theme_key(&stored_theme_key) {
+            Theme::from_name(&stored_theme_key).unwrap_or_else(|| theme.clone())
+        } else {
+            theme.clone()
+        };
 
         let mut app = AppState {
             categories,
@@ -1159,7 +1138,7 @@ impl AppState {
             status_message: None,
             paths,
             theme_key: stored_theme_key,
-            theme,
+            theme: resolved_theme,
             title: menu_file
                 .app_settings
                 .title
@@ -1208,7 +1187,7 @@ impl AppState {
                 let category = &self.categories[*category_index];
                 let marker = if category.expanded { "▼" } else { "▶" };
                 let mut style = Style::default()
-                    .fg(self.theme.accent)
+                    .fg(self.theme.text)
                     .bg(self.theme.surface)
                     .add_modifier(Modifier::BOLD);
                 if let Some(colors) = &category.colors {
@@ -1255,7 +1234,7 @@ impl AppState {
             owned.style = owned
                 .style
                 .fg(self.theme.background)
-                .bg(self.theme.accent)
+                .bg(self.theme.highlight)
                 .add_modifier(Modifier::BOLD);
             spans.push(owned);
         }
@@ -2126,12 +2105,17 @@ impl AppState {
     }
 
     fn footer_line_data(&self) -> FooterLineData {
-        let base_bg = self.theme.primary;
+        let base_bg =
+            color_from_hex("#76B3C5").unwrap_or_else(|| self.theme.highlight);
+        let shortcut_fg =
+            color_from_hex("#FDA009").unwrap_or_else(|| self.theme.accent);
+        let label_fg =
+            color_from_hex("#2E3544").unwrap_or_else(|| self.theme.surface);
         let shortcut_style = Style::default()
-            .fg(self.theme.accent)
+            .fg(shortcut_fg)
             .bg(base_bg)
             .add_modifier(Modifier::BOLD);
-        let label_style = Style::default().fg(self.theme.surface).bg(base_bg);
+        let label_style = Style::default().fg(label_fg).bg(base_bg);
         let mut spans: Vec<Span<'static>> = Vec::new();
         let mut segments = Vec::new();
         let mut cursor: u16 = 0;
@@ -2288,9 +2272,9 @@ impl AppState {
         self.saved_themes.remove(index);
         if let Some(old_index) = parse_saved_theme_key(&self.theme_key) {
             if old_index == index {
-                if let Some(fallback) = Theme::from_name("classic") {
+                if let Some(fallback) = Theme::from_name("nord") {
                     self.theme = fallback.clone();
-                    self.theme_key = "classic".into();
+                    self.theme_key = "nord".into();
                     let _ = self.theme.save(&self.paths.theme_file);
                 }
             } else if old_index > index {
@@ -3222,9 +3206,6 @@ impl CategoryFormState {
                 if is_selected {
                     label_style = label_style.add_modifier(Modifier::BOLD);
                 }
-                if highlight_palette {
-                    label_style = label_style.bg(app.theme.accent);
-                }
                 let preview_bg = color_from_hex(&preset.background);
                 let preview_text = color_from_hex(&preset.text).unwrap_or(app.theme.text);
                 let mut spans = vec![Span::styled(
@@ -3246,15 +3227,6 @@ impl CategoryFormState {
                     background_hex_style = background_hex_style.add_modifier(Modifier::BOLD);
                     divider_style = divider_style.add_modifier(Modifier::BOLD);
                     text_hex_style = text_hex_style.add_modifier(Modifier::BOLD);
-                }
-                if highlight_palette {
-                    background_hex_style = background_hex_style
-                        .bg(app.theme.accent)
-                        .fg(preview_bg.unwrap_or(app.theme.text));
-                    divider_style = divider_style.bg(app.theme.accent);
-                    text_hex_style = text_hex_style
-                        .bg(app.theme.accent)
-                        .fg(color_from_hex(&preset.text).unwrap_or(app.theme.text));
                 }
                 spans.push(Span::styled(preset.background.clone(), background_hex_style));
                 spans.push(Span::styled(" / ", divider_style));
@@ -3830,46 +3802,30 @@ impl SettingsFormState {
             layout.theme_list_start = Some(lines.len());
             for (idx, option) in self.theme_options.iter().enumerate() {
                 let is_active = self.theme_index == idx;
-                let highlight_active = is_active && self.selected_field == SettingsField::Theme;
                 let mut label_style = Style::default().fg(app.theme.text);
                 if is_active {
                     label_style = label_style.add_modifier(Modifier::BOLD);
-                }
-                if highlight_active {
-                    label_style = label_style.bg(app.theme.accent).fg(app.theme.background);
                 }
                 let mut spans = vec![Span::styled(
                     format!("{:>2}. {}", idx + 1, option.label),
                     label_style,
                 )];
                 if let Some(surface) = color_from_hex(&option.surface_hex) {
-                    if highlight_active {
-                        spans.push(Span::styled("  ", Style::default().bg(app.theme.accent)));
-                    } else {
-                        spans.push(Span::raw("  "));
-                    }
+                    spans.push(Span::raw("  "));
                     spans.push(Span::styled(
                         "     ",
                         Style::default().bg(surface).fg(app.theme.text),
                     ));
                 }
                 if let Some(accent) = color_from_hex(&option.accent_hex) {
-                    if highlight_active {
-                        spans.push(Span::styled(" ", Style::default().bg(app.theme.accent)));
-                    } else {
-                        spans.push(Span::raw(" "));
-                    }
+                    spans.push(Span::raw(" "));
                     spans.push(Span::styled(
                         "     ",
                         Style::default().bg(accent).fg(app.theme.background),
                     ));
                 }
                 if let Some(highlight) = color_from_hex(&option.highlight_hex) {
-                    if highlight_active {
-                        spans.push(Span::styled(" ", Style::default().bg(app.theme.accent)));
-                    } else {
-                        spans.push(Span::raw(" "));
-                    }
+                    spans.push(Span::raw(" "));
                     spans.push(Span::styled(
                         "     ",
                         Style::default().bg(highlight).fg(app.theme.background),
@@ -3883,20 +3839,10 @@ impl SettingsFormState {
                     ("Surface", &option.surface_hex),
                     ("Text", &option.text_hex),
                 ] {
-                    if highlight_active {
-                        spans.push(Span::styled("  ", Style::default().bg(app.theme.accent)));
-                    } else {
-                        spans.push(Span::raw("  "));
-                    }
+                    spans.push(Span::raw("  "));
                     let mut color_style = Style::default().fg(app.theme.text);
                     if is_active {
                         color_style = color_style.add_modifier(Modifier::BOLD);
-                    }
-                    if highlight_active {
-                        color_style = color_style.bg(app.theme.accent);
-                        if let Some(color) = color_from_hex(hex) {
-                            color_style = color_style.fg(color);
-                        }
                     }
                     spans.push(Span::styled(
                         format!("{} {}", label, hex.to_uppercase()),
@@ -4259,7 +4205,7 @@ impl Theme {
                 Err(_) => {}
             }
         }
-        let theme = Theme::from_name("classic").unwrap();
+        let theme = Theme::from_name("nord").unwrap();
         theme.save(path)?;
         Ok(theme)
     }
@@ -4305,16 +4251,16 @@ impl Theme {
     fn from_colors(name: &str, overrides: ThemeColorOverrides) -> Option<Self> {
         Some(Theme::from_hexes(
             name.to_string(),
-            overrides.primary.as_deref().unwrap_or("#6FC6D4"),
-            overrides.accent.as_deref().unwrap_or("#0F1A2B"),
+            overrides.primary.as_deref().unwrap_or("#5E81AC"),
+            overrides.accent.as_deref().unwrap_or("#D08770"),
             overrides
                 .highlight
                 .as_deref()
                 .or(overrides.accent.as_deref())
-                .unwrap_or("#9FE6EC"),
-            overrides.background.as_deref().unwrap_or("#314A63"),
-            overrides.surface.as_deref().unwrap_or("#416079"),
-            overrides.text.as_deref().unwrap_or("#F2F8FF"),
+                .unwrap_or("#76B3C5"),
+            overrides.background.as_deref().unwrap_or("#3B4252"),
+            overrides.surface.as_deref().unwrap_or("#4C566A"),
+            overrides.text.as_deref().unwrap_or("#ECEFF4"),
         ))
     }
 
@@ -4403,13 +4349,13 @@ const THEME_PRESETS: &[(&str, ThemeDefinition)] = &[
     (
         "nord",
         ThemeDefinition {
-            name: "Midnight Steel",
-            primary: "#74D0DC",
-            accent: "#111E30",
-            highlight: "#A7EAF0",
-            background: "#2B3F53",
-            surface: "#3C546B",
-            text: "#F2F7FF",
+            name: "Nord",
+            primary: "#5E81AC",
+            accent: "#D08770",
+            highlight: "#76B3C5",
+            background: "#3B4252",
+            surface: "#4C566A",
+            text: "#ECEFF4",
         },
     ),
     (
