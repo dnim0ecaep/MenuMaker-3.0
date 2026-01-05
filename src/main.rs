@@ -664,15 +664,20 @@ fn materialize_form_lines(
 fn highlight_line_with_width(
     mut line: Line<'static>,
     width: usize,
-    _app: &AppState,
+    app: &AppState,
 ) -> Line<'static> {
     let mut text_width = 0usize;
+    let highlight_style = Style::default()
+        .fg(app.theme.background)
+        .bg(app.theme.highlight)
+        .add_modifier(Modifier::BOLD);
     for span in &mut line.spans {
-        span.style = span.style.add_modifier(Modifier::BOLD);
+        span.style = highlight_style;
         text_width += UnicodeWidthStr::width(span.content.as_ref());
     }
     if width > text_width {
-        line.spans.push(Span::raw(" ".repeat(width - text_width)));
+        line.spans
+            .push(Span::styled(" ".repeat(width - text_width), highlight_style));
     }
     line
 }
@@ -951,6 +956,29 @@ fn default_true() -> bool {
     true
 }
 
+fn default_saved_theme() -> SavedTheme {
+    let base_theme = Theme::from_name("nord").unwrap_or_else(|| {
+        Theme::from_hexes(
+            "default".to_string(),
+            "#5E81AC",
+            "#D08770",
+            "#76B3C5",
+            "#3B4252",
+            "#4C566A",
+            "#ECEFF4",
+        )
+    });
+    SavedTheme {
+        name: "default".to_string(),
+        primary: base_theme.primary_hex.clone(),
+        accent: base_theme.accent_hex.clone(),
+        highlight: Some(base_theme.highlight_hex.clone()),
+        background: base_theme.background_hex.clone(),
+        surface: base_theme.surface_hex.clone(),
+        text: base_theme.text_hex.clone(),
+    }
+}
+
 impl MenuFile {
     fn load(path: &Path) -> Result<Self> {
         if path.exists() {
@@ -993,16 +1021,17 @@ impl MenuFile {
                 colors: None,
             },
         );
+        let saved_themes = vec![default_saved_theme()];
 
         MenuFile {
             categories,
             app_settings: AppSettings {
                 title: Some("Menu Maker — Enhanced Categorized Menu System".into()),
                 columns: Some(1),
-                theme_key: Some("nord".into()),
+                theme_key: Some(saved_theme_key(0)),
             },
             custom_colors: Vec::new(),
-            saved_themes: Vec::new(),
+            saved_themes,
         }
     }
 }
@@ -1074,7 +1103,15 @@ impl AppState {
     }
     fn new() -> Result<Self> {
         let paths = AppPaths::new()?;
-        let menu_file = MenuFile::load(&paths.menu_file)?;
+        let mut menu_file = MenuFile::load(&paths.menu_file)?;
+        if !menu_file
+            .saved_themes
+            .iter()
+            .any(|saved| saved.name.eq_ignore_ascii_case("default"))
+        {
+            menu_file.saved_themes.push(default_saved_theme());
+            let _ = menu_file.save(&paths.menu_file);
+        }
         let theme = Theme::load(&paths.theme_file)?;
         let saved_themes = menu_file.saved_themes.clone();
 
@@ -3849,7 +3886,12 @@ impl SettingsFormState {
                         color_style,
                     ));
                 }
-                lines.push(plain_line(Line::from(spans)));
+                let line = Line::from(spans);
+                if self.selected_field == SettingsField::Theme && is_active {
+                    lines.push(FormLine::highlighted(line));
+                } else {
+                    lines.push(FormLine::plain(line));
+                }
             }
             layout.theme_count = self.theme_options.len();
         }
