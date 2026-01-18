@@ -3664,13 +3664,6 @@ impl ItemFormState {
             self.selected_field == ItemField::Description,
             app,
         ));
-        layout.category_line = Some(lines.len());
-        lines.push(make_field_line(
-            "Category",
-            &self.category,
-            self.selected_field == ItemField::Category,
-            app,
-        ));
         layout.clear_screen_line = Some(lines.len());
         lines.push(make_toggle_line(
             "Clear Screen Before Run",
@@ -3683,6 +3676,13 @@ impl ItemFormState {
             "Pause After Run",
             self.pause,
             self.selected_field == ItemField::Pause,
+            app,
+        ));
+        layout.category_line = Some(lines.len());
+        lines.push(make_field_line(
+            "Category",
+            &self.category,
+            self.selected_field == ItemField::Category,
             app,
         ));
         if let Some(error) = &self.error {
@@ -3783,6 +3783,8 @@ impl ItemFormState {
             KeyCode::Down => {
                 if self.selected_field == ItemField::AvailableCategories {
                     self.next_available_category();
+                } else if self.selected_field == ItemField::Category {
+                    self.selected_field = ItemField::Label;
                 } else {
                     self.next_field();
                 }
@@ -3856,23 +3858,23 @@ impl ItemFormState {
         self.selected_field = match self.selected_field {
             ItemField::Label => ItemField::Command,
             ItemField::Command => ItemField::Description,
-            ItemField::Description => ItemField::Category,
-            ItemField::Category => ItemField::AvailableCategories,
-            ItemField::AvailableCategories => ItemField::ClearScreen,
+            ItemField::Description => ItemField::ClearScreen,
             ItemField::ClearScreen => ItemField::Pause,
-            ItemField::Pause => ItemField::Label,
+            ItemField::Pause => ItemField::Category,
+            ItemField::Category => ItemField::AvailableCategories,
+            ItemField::AvailableCategories => ItemField::Label,
         };
     }
 
     fn previous_field(&mut self) {
         self.selected_field = match self.selected_field {
-            ItemField::Label => ItemField::Pause,
+            ItemField::Label => ItemField::AvailableCategories,
             ItemField::Command => ItemField::Label,
             ItemField::Description => ItemField::Command,
-            ItemField::Category => ItemField::Description,
-            ItemField::AvailableCategories => ItemField::Category,
-            ItemField::ClearScreen => ItemField::AvailableCategories,
+            ItemField::ClearScreen => ItemField::Description,
             ItemField::Pause => ItemField::ClearScreen,
+            ItemField::Category => ItemField::Pause,
+            ItemField::AvailableCategories => ItemField::Category,
         };
     }
 
