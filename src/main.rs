@@ -75,10 +75,11 @@ where
         if let Some(pending) = app.take_pending_command() {
             match run_command(terminal, &pending) {
                 Ok(code) => {
-                    app.set_status(Some(format!(
-                        "Command exited with status {}",
-                        code.unwrap_or_default()
-                    )));
+                    let status_text = match code {
+                        Some(value) => value.to_string(),
+                        None => "unknown".to_string(),
+                    };
+                    app.set_status(Some(format!("Command exited with status {status_text}")));
                 }
                 Err(err) => app.set_status(Some(format!("Command failed: {err}"))),
             }
@@ -346,94 +347,11 @@ fn render_category_form_popup(
 }
 
 fn render_item_form_popup(frame: &mut Frame, area: Rect, app: &AppState, form: &ItemFormState) {
-    let mut lines: Vec<FormLine> = Vec::new();
-    lines.push(plain_line(Line::from("Fill in the menu item details below.")));
-    lines.push(make_field_line(
-        "Label",
-        &form.label,
-        form.selected_field == ItemField::Label,
-        app,
-    ));
-    lines.push(make_field_line(
-        "Command",
-        &form.command,
-        form.selected_field == ItemField::Command,
-        app,
-    ));
-    lines.push(make_field_line(
-        "Description",
-        &form.info,
-        form.selected_field == ItemField::Description,
-        app,
-    ));
-    lines.push(make_field_line(
-        "Category",
-        &form.category,
-        form.selected_field == ItemField::Category,
-        app,
-    ));
-    lines.push(make_toggle_line(
-        "Pause After Run",
-        form.pause,
-        form.selected_field == ItemField::Pause,
-        app,
-    ));
-    if let Some(error) = &form.error {
-        lines.push(plain_line(Line::from(vec![Span::styled(
-            error.clone(),
-            Style::default().fg(Color::Red),
-        )])));
-    }
-    if !form.available_categories.is_empty() {
-        lines.push(plain_line(Line::from("")));
-        lines.push(plain_line(Line::from(vec![Span::styled(
-            "Available Categories:",
-            Style::default()
-                .fg(app.theme.accent)
-                .add_modifier(Modifier::BOLD),
-        )])));
-        for category in &form.available_categories {
-            lines.push(plain_line(Line::from(format!("  • {}", category))));
-        }
-    }
-
-    let shortcut_line = Line::from(vec![
-        Span::styled(
-            "Tab",
-            Style::default()
-                .fg(app.theme.accent)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw("/"),
-        Span::styled(
-            "Shift+Tab",
-            Style::default()
-                .fg(app.theme.accent)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(" Move    "),
-        Span::styled(
-            "Enter",
-            Style::default()
-                .fg(app.theme.accent)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(" Save    "),
-        Span::styled(
-            "Esc",
-            Style::default()
-                .fg(app.theme.accent)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(" Cancel    "),
-        Span::styled(
-            "Space",
-            Style::default()
-                .fg(app.theme.accent)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(" Toggle Pause"),
-    ]);
+    let (lines, layout) = form.render_lines(app);
+    let shortcut_line = layout
+        .shortcut_line
+        .clone()
+        .unwrap_or_else(|| Line::from(""));
 
     if let Some(sections) = popup_sections(area) {
         frame.render_widget(
@@ -810,15 +728,16 @@ where
     B: ratatui::backend::Backend + Write,
 {
     with_terminal_suspension(terminal, || {
+        if pending.clear_screen {
+            print!("\x1b[2J\x1b[H");
+            io::stdout().flush()?;
+        }
         let status = Command::new("sh").arg("-c").arg(&pending.command).status();
 
         let exit_code = match status {
             Ok(status) => {
                 if pending.pause {
-                    println!(
-                        "\nCommand exited with code {:?}. Press Enter to return...",
-                        status.code()
-                    );
+                    println!("\nPress Enter to return...");
                     let _ = io::stdin().read_line(&mut String::new());
                 }
                 status.code()
@@ -950,6 +869,7 @@ struct MenuItemConfig {
     info: Option<String>,
     category: Option<String>,
     pause: Option<bool>,
+    clear_screen: Option<bool>,
 }
 
 fn default_true() -> bool {
@@ -1017,6 +937,7 @@ impl MenuFile {
                     info: Some("Interactive process viewer".into()),
                     category: Some("System Tools".into()),
                     pause: Some(false),
+                    clear_screen: Some(false),
                 }],
                 colors: None,
             },
@@ -1540,6 +1461,71 @@ impl AppState {
         }
         let popup = self.active_popup.as_ref()?;
         match popup {
+            PopupState::ItemForm(form) => {
+                let (_lines, layout) = form.render_lines(self);
+                let Some([_, _shortcut_area, content_area, _]) = popup_sections(terminal_area)
+                else {
+                    return None;
+                };
+                let inner = content_area.inner(&popup_content_margin());
+                if inner.width == 0
+                    || inner.height == 0
+                    || mouse.column < inner.x
+                    || mouse.column >= inner.x + inner.width
+                    || mouse.row < inner.y
+                    || mouse.row >= inner.y + inner.height
+                {
+                    return None;
+                }
+                let line_idx = usize::from(mouse.row.saturating_sub(inner.y));
+                if line_idx >= layout.line_count {
+                    return None;
+                }
+                if layout.label_line == Some(line_idx) {
+                    return Some(PopupClickAction::Item(ItemFormClick::SelectField(
+                        ItemField::Label,
+                    )));
+                }
+                if layout.command_line == Some(line_idx) {
+                    return Some(PopupClickAction::Item(ItemFormClick::SelectField(
+                        ItemField::Command,
+                    )));
+                }
+                if layout.description_line == Some(line_idx) {
+                    return Some(PopupClickAction::Item(ItemFormClick::SelectField(
+                        ItemField::Description,
+                    )));
+                }
+                if layout.category_line == Some(line_idx) {
+                    return Some(PopupClickAction::Item(ItemFormClick::SelectField(
+                        ItemField::Category,
+                    )));
+                }
+                if layout.clear_screen_line == Some(line_idx) {
+                    return Some(PopupClickAction::Item(ItemFormClick::SelectField(
+                        ItemField::ClearScreen,
+                    )));
+                }
+                if layout.pause_line == Some(line_idx) {
+                    return Some(PopupClickAction::Item(ItemFormClick::SelectField(
+                        ItemField::Pause,
+                    )));
+                }
+                if layout.available_heading_line == Some(line_idx) {
+                    return Some(PopupClickAction::Item(ItemFormClick::SelectField(
+                        ItemField::AvailableCategories,
+                    )));
+                }
+                if let Some(start) = layout.available_start_line {
+                    if line_idx >= start && line_idx < start + layout.available_count {
+                        let index = line_idx - start;
+                        return Some(PopupClickAction::Item(
+                            ItemFormClick::SelectAvailableCategory(index),
+                        ));
+                    }
+                }
+                None
+            }
             PopupState::CategoryForm(form) => {
                 let (_lines, layout) = form.render_lines(self);
                 let Some([_, shortcut_area, content_area, _]) = popup_sections(terminal_area)
@@ -1762,6 +1748,20 @@ impl AppState {
 
     fn apply_popup_click(&mut self, action: PopupClickAction) {
         match action {
+            PopupClickAction::Item(item_click) => {
+                if let Some(PopupState::ItemForm(form)) = self.active_popup.as_mut() {
+                    match item_click {
+                        ItemFormClick::SelectField(field) => {
+                            form.selected_field = field;
+                        }
+                        ItemFormClick::SelectAvailableCategory(index) => {
+                            form.selected_field = ItemField::AvailableCategories;
+                            form.pick_available_category(index);
+                            form.selected_field = ItemField::Category;
+                        }
+                    }
+                }
+            }
             PopupClickAction::Category(category_click) => {
                 let mut pending_submit: Option<CategorySubmitPayload> = None;
                 let mut pending_delete: Option<usize> = None;
@@ -2015,6 +2015,7 @@ impl AppState {
             self.pending_command = Some(PendingCommand {
                 command: item.cmd.clone(),
                 pause: item.pause,
+                clear_screen: item.clear_screen,
             });
         }
     }
@@ -2395,6 +2396,11 @@ impl AppState {
                     false,
                 )
             };
+        let default_clear_screen = if let Some((cat_idx, item_idx)) = target {
+            self.categories[cat_idx].items[item_idx].clear_screen
+        } else {
+            false
+        };
 
         let fallback_category = default_categories
             .get(0)
@@ -2414,6 +2420,7 @@ impl AppState {
             initial_category,
             fallback_category,
             default_pause,
+            default_clear_screen,
             default_categories,
         );
         self.active_popup = Some(PopupState::ItemForm(form));
@@ -2490,6 +2497,7 @@ impl AppState {
                 cmd: cmd_path,
                 info: format!("Executable: {filename}"),
                 pause: false,
+                clear_screen: false,
             });
         }
 
@@ -2528,6 +2536,7 @@ impl AppState {
             cmd: command.to_string(),
             info,
             pause: input.pause,
+            clear_screen: input.clear_screen,
         };
 
         match input.target {
@@ -2879,6 +2888,7 @@ impl AppState {
 struct PendingCommand {
     command: String,
     pause: bool,
+    clear_screen: bool,
 }
 
 #[derive(Clone)]
@@ -2887,6 +2897,7 @@ struct MenuItem {
     cmd: String,
     info: String,
     pause: bool,
+    clear_screen: bool,
 }
 
 impl MenuItem {
@@ -2899,6 +2910,7 @@ impl MenuItem {
                 .clone()
                 .unwrap_or_else(|| format!("Item in {category}")),
             pause: cfg.pause.unwrap_or(false),
+            clear_screen: cfg.clear_screen.unwrap_or(false),
         }
     }
 }
@@ -2942,6 +2954,7 @@ impl CategoryState {
                     info: Some(item.info.clone()),
                     category: Some(self.name.clone()),
                     pause: Some(item.pause),
+                    clear_screen: Some(item.clear_screen),
                 })
                 .collect(),
             colors: self.colors.clone(),
@@ -2975,7 +2988,9 @@ struct ItemFormState {
     category: String,
     fallback_category: String,
     pause: bool,
+    clear_screen: bool,
     available_categories: Vec<String>,
+    available_category_index: usize,
     selected_field: ItemField,
     error: Option<String>,
     mode_label: &'static str,
@@ -2990,6 +3005,22 @@ struct ItemFormInput {
     category: String,
     fallback_category: String,
     pause: bool,
+    clear_screen: bool,
+}
+
+#[derive(Default)]
+struct ItemFormLayout {
+    line_count: usize,
+    label_line: Option<usize>,
+    command_line: Option<usize>,
+    description_line: Option<usize>,
+    category_line: Option<usize>,
+    clear_screen_line: Option<usize>,
+    pause_line: Option<usize>,
+    available_heading_line: Option<usize>,
+    available_start_line: Option<usize>,
+    available_count: usize,
+    shortcut_line: Option<Line<'static>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -2998,6 +3029,8 @@ enum ItemField {
     Command,
     Description,
     Category,
+    AvailableCategories,
+    ClearScreen,
     Pause,
 }
 
@@ -3032,8 +3065,14 @@ enum PopupResult {
 }
 
 enum PopupClickAction {
+    Item(ItemFormClick),
     Category(CategoryFormClick),
     Settings(SettingsFormClick),
+}
+
+enum ItemFormClick {
+    SelectField(ItemField),
+    SelectAvailableCategory(usize),
 }
 
 enum CategoryFormClick {
@@ -3566,8 +3605,18 @@ impl ItemFormState {
         category: String,
         fallback_category: String,
         pause: bool,
+        clear_screen: bool,
         available_categories: Vec<String>,
     ) -> Self {
+        let mut available_category_index = 0;
+        if !available_categories.is_empty() {
+            if let Some(index) = available_categories
+                .iter()
+                .position(|name| name == &category)
+            {
+                available_category_index = index;
+            }
+        }
         Self {
             target,
             label,
@@ -3576,7 +3625,9 @@ impl ItemFormState {
             category,
             fallback_category,
             pause,
+            clear_screen,
             available_categories,
+            available_category_index,
             selected_field: ItemField::Label,
             error: None,
             mode_label: if target.is_some() {
@@ -3587,21 +3638,177 @@ impl ItemFormState {
         }
     }
 
+    fn render_lines(&self, app: &AppState) -> (Vec<FormLine>, ItemFormLayout) {
+        let mut layout = ItemFormLayout::default();
+        let mut lines: Vec<FormLine> = Vec::new();
+        lines.push(plain_line(Line::from("Fill in the menu item details below.")));
+
+        layout.label_line = Some(lines.len());
+        lines.push(make_field_line(
+            "Label",
+            &self.label,
+            self.selected_field == ItemField::Label,
+            app,
+        ));
+        layout.command_line = Some(lines.len());
+        lines.push(make_field_line(
+            "Command",
+            &self.command,
+            self.selected_field == ItemField::Command,
+            app,
+        ));
+        layout.description_line = Some(lines.len());
+        lines.push(make_field_line(
+            "Description",
+            &self.info,
+            self.selected_field == ItemField::Description,
+            app,
+        ));
+        layout.category_line = Some(lines.len());
+        lines.push(make_field_line(
+            "Category",
+            &self.category,
+            self.selected_field == ItemField::Category,
+            app,
+        ));
+        layout.clear_screen_line = Some(lines.len());
+        lines.push(make_toggle_line(
+            "Clear Screen Before Run",
+            self.clear_screen,
+            self.selected_field == ItemField::ClearScreen,
+            app,
+        ));
+        layout.pause_line = Some(lines.len());
+        lines.push(make_toggle_line(
+            "Pause After Run",
+            self.pause,
+            self.selected_field == ItemField::Pause,
+            app,
+        ));
+        if let Some(error) = &self.error {
+            lines.push(plain_line(Line::from(vec![Span::styled(
+                error.clone(),
+                Style::default().fg(Color::Red),
+            )])));
+        }
+        if !self.available_categories.is_empty() {
+            lines.push(plain_line(Line::from("")));
+            layout.available_heading_line = Some(lines.len());
+            let heading_line = Line::from(vec![Span::styled(
+                "Available Categories (Tab to focus, ↑/↓ move, Enter pick)",
+                Style::default()
+                    .fg(app.theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            )]);
+            let heading = if self.selected_field == ItemField::AvailableCategories {
+                FormLine::highlighted(heading_line)
+            } else {
+                FormLine::plain(heading_line)
+            };
+            lines.push(heading);
+            layout.available_start_line = Some(lines.len());
+            for (idx, category) in self.available_categories.iter().enumerate() {
+                let entry = format!("  • {}", category);
+                let line = if self.selected_field == ItemField::AvailableCategories
+                    && idx == self.available_category_index
+                {
+                    FormLine::highlighted(Line::from(entry))
+                } else {
+                    FormLine::plain(Line::from(entry))
+                };
+                lines.push(line);
+            }
+            layout.available_count = self.available_categories.len();
+        }
+
+        let shortcut_line = Line::from(vec![
+            Span::styled(
+                "Tab",
+                Style::default()
+                    .fg(app.theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("/"),
+            Span::styled(
+                "Shift+Tab",
+                Style::default()
+                    .fg(app.theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Move    "),
+            Span::styled(
+                "Enter",
+                Style::default()
+                    .fg(app.theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Save    "),
+            Span::styled(
+                "Esc",
+                Style::default()
+                    .fg(app.theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Cancel    "),
+            Span::styled(
+                "Space",
+                Style::default()
+                    .fg(app.theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Toggle Option"),
+        ]);
+        layout.shortcut_line = Some(shortcut_line);
+        layout.line_count = lines.len();
+        (lines, layout)
+    }
+
     fn handle_key(&mut self, key: KeyEvent) -> ItemFormKeyResult {
         self.error = None;
         match key.code {
             KeyCode::Esc => ItemFormKeyResult::Cancel,
-            KeyCode::Enter => ItemFormKeyResult::Submit(self.to_input()),
-            KeyCode::Tab | KeyCode::Down => {
+            KeyCode::Enter => {
+                if self.selected_field == ItemField::AvailableCategories {
+                    self.pick_available_category(self.available_category_index);
+                    self.selected_field = ItemField::Category;
+                    ItemFormKeyResult::Continue
+                } else {
+                    ItemFormKeyResult::Submit(self.to_input())
+                }
+            }
+            KeyCode::Tab => {
                 self.next_field();
                 ItemFormKeyResult::Continue
             }
-            KeyCode::BackTab | KeyCode::Up => {
+            KeyCode::Down => {
+                if self.selected_field == ItemField::AvailableCategories {
+                    self.next_available_category();
+                } else {
+                    self.next_field();
+                }
+                ItemFormKeyResult::Continue
+            }
+            KeyCode::BackTab => {
                 self.previous_field();
                 ItemFormKeyResult::Continue
             }
-            KeyCode::Char(' ') if self.selected_field == ItemField::Pause => {
-                self.pause = !self.pause;
+            KeyCode::Up => {
+                if self.selected_field == ItemField::AvailableCategories {
+                    self.previous_available_category();
+                } else {
+                    self.previous_field();
+                }
+                ItemFormKeyResult::Continue
+            }
+            KeyCode::Char(' ')
+                if self.selected_field == ItemField::Pause
+                    || self.selected_field == ItemField::ClearScreen =>
+            {
+                if self.selected_field == ItemField::Pause {
+                    self.pause = !self.pause;
+                } else {
+                    self.clear_screen = !self.clear_screen;
+                }
                 ItemFormKeyResult::Continue
             }
             KeyCode::Backspace => {
@@ -3618,6 +3825,8 @@ impl ItemFormState {
             }
             KeyCode::Char(c) => {
                 if self.selected_field != ItemField::Pause
+                    && self.selected_field != ItemField::AvailableCategories
+                    && self.selected_field != ItemField::ClearScreen
                     && !key.modifiers.contains(KeyModifiers::CONTROL)
                 {
                     if let Some(value) = self.active_value_mut() {
@@ -3639,6 +3848,7 @@ impl ItemFormState {
             category: self.category.clone(),
             fallback_category: self.fallback_category.clone(),
             pause: self.pause,
+            clear_screen: self.clear_screen,
         }
     }
 
@@ -3647,7 +3857,9 @@ impl ItemFormState {
             ItemField::Label => ItemField::Command,
             ItemField::Command => ItemField::Description,
             ItemField::Description => ItemField::Category,
-            ItemField::Category => ItemField::Pause,
+            ItemField::Category => ItemField::AvailableCategories,
+            ItemField::AvailableCategories => ItemField::ClearScreen,
+            ItemField::ClearScreen => ItemField::Pause,
             ItemField::Pause => ItemField::Label,
         };
     }
@@ -3658,7 +3870,9 @@ impl ItemFormState {
             ItemField::Command => ItemField::Label,
             ItemField::Description => ItemField::Command,
             ItemField::Category => ItemField::Description,
-            ItemField::Pause => ItemField::Category,
+            ItemField::AvailableCategories => ItemField::Category,
+            ItemField::ClearScreen => ItemField::AvailableCategories,
+            ItemField::Pause => ItemField::ClearScreen,
         };
     }
 
@@ -3668,7 +3882,35 @@ impl ItemFormState {
             ItemField::Command => Some(&mut self.command),
             ItemField::Description => Some(&mut self.info),
             ItemField::Category => Some(&mut self.category),
+            ItemField::AvailableCategories => None,
+            ItemField::ClearScreen => None,
             ItemField::Pause => None,
+        }
+    }
+
+    fn next_available_category(&mut self) {
+        if self.available_categories.is_empty() {
+            return;
+        }
+        self.available_category_index =
+            (self.available_category_index + 1) % self.available_categories.len();
+    }
+
+    fn previous_available_category(&mut self) {
+        if self.available_categories.is_empty() {
+            return;
+        }
+        if self.available_category_index == 0 {
+            self.available_category_index = self.available_categories.len() - 1;
+        } else {
+            self.available_category_index -= 1;
+        }
+    }
+
+    fn pick_available_category(&mut self, index: usize) {
+        if let Some(category) = self.available_categories.get(index) {
+            self.available_category_index = index;
+            self.category = category.clone();
         }
     }
 }
